@@ -1,5 +1,13 @@
 # kharita
-Robust and online map inference from crowded gps data
+
+Kharita (Map in Arabic) is a Robust and online algorithm for map inference from crowdsourced gps data.
+The details of the algorithm can be found in:
+
+Rade Stanojevic, Sofiane Abbar, Saravanan Thirumuruganathan, Sanjay Chawla, Fethi Felali, Ahid Aliemat: 
+Kharita: Robust Map Inference using Graph Spanners.
+Submitted to ACM SIGKDD'2017
+
+Arxiv link: 
 
 ## Input
 The input is a csv file in the following format:
@@ -13,13 +21,21 @@ angle: in 0-360 interval. Angle to the north.
 ## Running Kharita
 Kharita can be invoked from command line as follows:
 
-python khrita.py -p data -f data_2015-10-01 -r 25 -s 10 -a 40
+`python khrita.py -p data -f data_2015-10-01 -r 25 -s 10 -a 40`
 
--p: the folder containing the input data
--f: the input file name without its extension.
--r: the radius (cr) in meters used for the clustering
--s: the densification distance (sr) in meters
--a: the angle heading tolerance in degrees (0-360)
+**-p**: the folder containing the input data
+
+**-f**: the input file name without its extension
+
+**-r**: the radius (cr) in meters used for the clustering
+
+**-s**: the densification distance (sr) in meters
+
+**-a**: the angle heading tolerance in degrees (0-360)
 
 ## Output
 The code will produce a txt file containing the edges of the generated graph. 
+
+
+## Contact
+Sofiane Abbar (sofiane.abbar@gmail.com)

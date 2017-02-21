@@ -39,5 +39,8 @@ Kharita can be invoked from command line as follows:
 ## Output
 The code will produce a txt file containing the edges of the generated graph. 
 
+### UIC map example
+![Alt text](figs/uic_map.png?raw=true "UIC MAP")
+
 ## Contact
 Sofiane Abbar (sofiane.abbar@gmail.com)

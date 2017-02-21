@@ -35,7 +35,7 @@ Kharita can be invoked from command line as follows:
 `python kharita_star.py -p data -f data_uic -r 100 -s 20 -a 60`
 
 ## Output
-The code will produce a txt file containing the edges of the generated graph. 
+The code will produce a txt file containing the edges of the generated **directed graph**. 
 
 ### UIC map example
 ![Alt text](figs/uic_map.png?raw=true "UIC MAP")

@@ -3,11 +3,9 @@
 Kharita (Map in Arabic) is a Robust and online algorithm for map inference from crowdsourced gps data.
 The details of the algorithm can be found in:
 
-Rade Stanojevic, Sofiane Abbar, Saravanan Thirumuruganathan, Sanjay Chawla, Fethi Felali, Ahid Aliemat: 
-**_Kharita: Robust Map Inference using Graph Spanners._**
+_Rade Stanojevic, Sofiane Abbar, Saravanan Thirumuruganathan, Sanjay Chawla, Fethi Felali, Ahid Aliemat_: 
+**_Kharita: Robust Map Inference using Graph Spanners._** [[Arxiv PDF](https://arxiv.org/abs/1702.06025)]
 Submitted to ACM SIGKDD'2017.
-
-Arxiv link: 
 
 ## Input
 The input is a csv file in the following format:

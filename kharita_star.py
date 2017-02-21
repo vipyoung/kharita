@@ -11,61 +11,8 @@ import getopt
 import datetime
 import networkx as nx
 from scipy.spatial import cKDTree
-from methods import create_trajectories, diffangles, partition_edge, vector_direction_re_north
+from methods import create_trajectories, diffangles, partition_edge, vector_direction_re_north, Cluster
 
-class Cluster:
-	def __init__(self, cid=None, nb_points=None, last_seen=None, lat=None, lon=None, angle=None):
-		self.cid = cid
-		self.lon = lon
-		self.lat = lat
-		self.angle = angle
-		self.last_seen = last_seen
-		self.nb_points = nb_points
-		self.points = []
-
-	def get_coordinates(self):
-		return (self.lat, self.lon)
-
-	def get_lonlat(self):
-		return (self.lon, self.lat)
-
-	def add(self, point):
-		self.points.append(point)
-		self.nb_points += 1
-		#self._recompute_center()
-
-	def _recompute_center(self):
-		self.lon = sum([p.lon for p in self.points]) / len(self.points)
-		self.lat = sum([p.lat for p in self.points]) / len(self.points)
-		self.angle = self._meanangle([p.angle for p in self.points])
-
-	def _meanangle(self, anglelist):
-		return(np.arctan2(sum([np.sin(alpha/360*2*np.pi) for alpha in anglelist]),sum([np.cos(alpha/360*2*np.pi) for alpha in anglelist]))*180/np.pi)
-
-
-def satisfy_path_condition_distance(s, t, g, clusters, alpha):
-	"""
-	return False if there's a path of length max length, True otherwise
-	:param s:
-	:param t:
-	:param k_reach:
-	:return:
-	"""
-	if s == -1 or t == -1 or s == t:
-		return False
-
-	edge_distance = geopy.distance.distance(geopy.Point(clusters[s].get_coordinates()), \
-	                                        geopy.Point(clusters[t].get_coordinates())).meters
-	if not nx.has_path(g, s, t):
-		return True
-	path = nx.shortest_path(g, source=s, target=t)
-	path_length_meters = 0
-	for i in range(1, len(path)):
-		path_length_meters += geopy.distance.distance(geopy.Point(clusters[path[i - 1]].get_coordinates()),\
-	                                        geopy.Point(clusters[path[i]].get_coordinates())).meters
-	if path_length_meters >= alpha * edge_distance:
-		return True
-	return False
 
 if __name__ == '__main__':
 	# Default parameters

@@ -7,6 +7,7 @@ import geopy
 import geopy.distance
 import math
 
+
 class GpsPoint:
 	def __init__(self, vehicule_id=None, lon=None, lat=None, speed=None, timestamp=None, angle=None):
 			self.vehicule_id = int(vehicule_id) if vehicule_id != None else 0
@@ -36,6 +37,67 @@ class GpsPoint:
 			   (self.vehicule_id, self.speed, self.timestamp, self.lon, self.lat, self.angle)
 
 
+class Cluster:
+	def __init__(self, cid=None, nb_points=None, last_seen=None, lat=None, lon=None, angle=None):
+		self.cid = cid
+		self.lon = lon
+		self.lat = lat
+		self.angle = angle
+		self.last_seen = last_seen
+		self.nb_points = nb_points
+		self.points = []
+
+	def get_coordinates(self):
+		return (self.lat, self.lon)
+
+	def get_lonlat(self):
+		return (self.lon, self.lat)
+
+	def add(self, point):
+		self.points.append(point)
+		self.nb_points += 1
+		#self._recompute_center()
+
+	def _recompute_center(self):
+		self.lon = sum([p.lon for p in self.points]) / len(self.points)
+		self.lat = sum([p.lat for p in self.points]) / len(self.points)
+		self.angle = self._meanangle([p.angle for p in self.points])
+
+	def _meanangle(self, anglelist):
+		"""
+		Author: Rade Stanojevic.
+		Computes the average value of a list of angles expressed in 0-360 interval.
+		:param anglelist: list of angles
+		:return: average
+		"""
+		return(np.arctan2(sum([np.sin(alpha/360*2*np.pi) for alpha in anglelist]),sum([np.cos(alpha/360*2*np.pi) for alpha in anglelist]))*180/np.pi)
+
+
+def satisfy_path_condition_distance(s, t, g, clusters, alpha):
+	"""
+	return False if there's a path of length max length, True otherwise
+	:param s:
+	:param t:
+	:param k_reach:
+	:return:
+	"""
+	if s == -1 or t == -1 or s == t:
+		return False
+
+	edge_distance = geopy.distance.distance(geopy.Point(clusters[s].get_coordinates()), \
+	                                        geopy.Point(clusters[t].get_coordinates())).meters
+	if not nx.has_path(g, s, t):
+		return True
+	path = nx.shortest_path(g, source=s, target=t)
+	path_length_meters = 0
+	for i in range(1, len(path)):
+		path_length_meters += geopy.distance.distance(geopy.Point(clusters[path[i - 1]].get_coordinates()),\
+	                                        geopy.Point(clusters[path[i]].get_coordinates())).meters
+	if path_length_meters >= alpha * edge_distance:
+		return True
+	return False
+
+
 def load_data(fname='data/gps_data/gps_points.csv'):
 	"""
 	Given a file that contains gps points, this method creates different data structures
@@ -55,7 +117,6 @@ def load_data(fname='data/gps_data/gps_points.csv'):
 			pt = GpsPoint(vehicule_id=vehicule_id, timestamp=timestamp, lat=lat, lon=lon, speed=speed,angle=angle)
 			data_points.append(pt)
 			raw_points.append(pt.get_coordinates())
-	print 'Len raw points:', len(raw_points)
 	points_tree = cKDTree(raw_points)
 	return np.array(data_points), np.array(raw_points), points_tree
 
@@ -94,6 +155,12 @@ def create_trajectories(INPUT_FILE_NAME='data/gps_data/gps_points_07-11.csv', wa
 
 
 def diffangles(a1, a2):
+	"""
+	Difference between two angles in 0-360 degrees.
+	:param a1: angle 1
+	:param a2: angle 2
+	:return: difference
+	"""
 	return 180 - abs(abs(a1 - a2) - 180)
 
 
@@ -125,6 +192,7 @@ def partition_edge(edge, distance_interval):
 	# return holes, initial_dist - (initial_dist / distance_interval) * distance_interval
 	return holes
 
+
 def calculate_bearing(latitude_1, longitude_1, latitude_2, longitude_2):
 	"""
 	Got it from this link: http://pastebin.com/JbhWKJ5m
@@ -139,24 +207,7 @@ def calculate_bearing(latitude_1, longitude_1, latitude_2, longitude_2):
 	b = math.atan2(math.sin(drlon) * math.cos(rlat2), math.cos(rlat1) * math.sin(rlat2) -
 	               math.sin(rlat1) * math.cos(rlat2) * math.cos(drlon))
 	return (math.degrees(b) + 360) % 360
-#
-# def heading_vector_re_north(s, d):
-# 	"""
-# 	WRONG, doesn't account for the actual direction of the vector.!!!
-# 	compute the vector angle from the north (north = 0 degree)
-# 	:param s: source point
-# 	:param d: destination point
-# 	:return: angle in degrees from the north
-# 	"""
-# 	num = d.lat - s.lat
-# 	den = d.lon - s.lon
-# 	if den == 0 and num > 0:
-# 		angle = 90
-# 	elif den == 0 and num < 0:
-# 		angle = -90
-# 	else:
-# 		angle = math.degrees(math.atan(num / den))
-# 	return -1 * angle + 90
+
 
 def vector_direction_re_north(s, d):
 	"""
@@ -169,7 +220,6 @@ def vector_direction_re_north(s, d):
 	# find the new coordinates of the destination point in a plan originated at source.
 	new_d_lon = d.lon - s.lon
 	new_d_lat = d.lat - s.lat
-	 # angle = -angle + 90 is used to change the angle reference from east to north.
 	angle = -math.degrees(math.atan2(new_d_lat, new_d_lon)) + 90
 
 	# the following is required to move the degrees from -180, 180 to 0, 360

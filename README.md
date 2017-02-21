@@ -19,7 +19,7 @@ angle: in 0-360 interval. Angle to the north.
 ## Running Kharita
 Kharita can be invoked from command line as follows:
 
-`python khrita.py -p data -f data_2015-10-01 -r 25 -s 10 -a 40`
+`python kharita_star.py -p data -f data_2015-10-01 -r 25 -s 10 -a 40`
 
 **-p**: the folder containing the input data
 
@@ -32,7 +32,7 @@ Kharita can be invoked from command line as follows:
 **-a**: the angle heading tolerance in degrees (0-360)
 
 ### Example 
-`python khrita.py -p data -f data_uic -r 100 -s 20 -a 60`
+`python kharita_star.py -p data -f data_uic -r 100 -s 20 -a 60`
 
 ## Output
 The code will produce a txt file containing the edges of the generated graph. 

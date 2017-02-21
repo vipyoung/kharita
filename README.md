@@ -33,9 +33,11 @@ Kharita can be invoked from command line as follows:
 
 **-a**: the angle heading tolerance in degrees (0-360)
 
+### Example 
+`python khrita.py -p data -f data_uic -r 100 -s 20 -a 60`
+
 ## Output
 The code will produce a txt file containing the edges of the generated graph. 
-
 
 ## Contact
 Sofiane Abbar (sofiane.abbar@gmail.com)

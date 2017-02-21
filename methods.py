@@ -12,7 +12,6 @@ class GpsPoint:
 			self.vehicule_id = int(vehicule_id) if vehicule_id != None else 0
 			self.speed = float(speed) if speed != None else 0.0
 			if timestamp != None:
-				print 'timestamp:', timestamp
 				self.timestamp = datetime.datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S+03')
 			self.lon = float(lon)
 			self.lat = float(lat)

@@ -40,6 +40,13 @@ The code will produce a txt file containing the edges of the generated **directe
 ### UIC map example
 ![Alt text](figs/uic_map.png?raw=true "UIC MAP")
 
+#### Kharita* map
+![Alt text](figs/uic_map.png?raw=true "Kharita* UIC MAP")
+
+#### Kharita map
+![Alt text](figs/uic_map_offline.png?raw=true "Kharita UIC MAP")
+
+
 ## Citation
 For any use of this code, please cite our work as follows:
 _Rade Stanojevic, Sofiane Abbar, Saravanan Thirumuruganathan, Sanjay Chawla, Fethi Felali, Ahid Aliemat_: 

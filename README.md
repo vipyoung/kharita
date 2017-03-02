@@ -37,8 +37,7 @@ Kharita can be invoked from command line as follows:
 ## Output
 The code will produce a txt file containing the edges of the generated **directed graph**. 
 
-### UIC map example
-![Alt text](figs/uic_map.png?raw=true "UIC MAP")
+### UIC map examples
 
 #### Kharita* map
 ![Alt text](figs/uic_map.png?raw=true "Kharita* UIC MAP")

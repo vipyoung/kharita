@@ -9,7 +9,7 @@ Submitted to ACM SIGKDD'2017 [[Arxiv version](https://arxiv.org/abs/1702.06025)]
 
 ## Input
 The input is a csv file in the following format:
-vehicule_id,timestamp,lon,lat,speed,angle
+vehicule_id,timestamp,lat,lon,speed,angle
 
 Vehicule_id: important to identify trajectories.
 Timestamp: important to sort gps points within trajectories

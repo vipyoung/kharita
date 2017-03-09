@@ -12,8 +12,7 @@ class GpsPoint:
 	def __init__(self, vehicule_id=None, lon=None, lat=None, speed=None, timestamp=None, angle=None):
 			self.vehicule_id = int(vehicule_id) if vehicule_id != None else 0
 			self.speed = float(speed) if speed != None else 0.0
-			if timestamp != None:
-				self.timestamp = datetime.datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S+03')
+			self.timestamp = datetime.datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S+03') if timestamp !=None else 0
 			self.lon = float(lon)
 			self.lat = float(lat)
 			self.angle = float(angle)
@@ -56,6 +55,7 @@ class Cluster:
 	def add(self, point):
 		self.points.append(point)
 		self.nb_points += 1
+		self.last_seen = point.timestamp
 		#self._recompute_center()
 
 	def _recompute_center(self):
@@ -176,8 +176,8 @@ def partition_edge(edge, distance_interval):
 	holes = []
 	d = geopy.distance.VincentyDistance(meters=distance_interval)
 	# make sure we are using lat,lon not lon,lat as a reference.
-	startpoint = geopy.Point(edge[0])
-	endpoint = geopy.Point(edge[1])
+	startpoint = geopy.Point(edge[0].get_coordinates())
+	endpoint = geopy.Point(edge[1].get_coordinates())
 	initial_dist = geopy.distance.distance(startpoint, endpoint).meters
 	if initial_dist < distance_interval:
 		# return [], distance_interval - initial_dist
@@ -185,9 +185,14 @@ def partition_edge(edge, distance_interval):
 	# compute the angle=bearing at which we need to be moving.
 	bearing = calculate_bearing(startpoint[0], startpoint[1], endpoint[0], endpoint[1])
 	last_point = startpoint
+	diff_time = edge[1].last_seen - edge[0].last_seen
+	delta_time = diff_time.days*24*3600 + diff_time.seconds
+	time_increment = delta_time / (int(initial_dist) / distance_interval)
 	for i in range(int(initial_dist) / distance_interval):
 		new_point = geopy.Point(d.destination(point=last_point, bearing=bearing))
-		holes.append(GpsPoint(lat=new_point.latitude, lon=new_point.longitude, angle=bearing))
+		str_timestamp = datetime.datetime.strftime(edge[0].last_seen + datetime.timedelta(seconds=time_increment), "%Y-%m-%d %H:%M:%S+03")
+		holes.append(GpsPoint(lat=new_point.latitude, lon=new_point.longitude, angle=bearing,
+		                      timestamp=str_timestamp))
 		last_point = new_point
 	# return holes, initial_dist - (initial_dist / distance_interval) * distance_interval
 	return holes

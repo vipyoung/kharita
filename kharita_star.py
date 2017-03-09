@@ -17,14 +17,10 @@ from methods import create_trajectories, diffangles, partition_edge, vector_dire
 if __name__ == '__main__':
 	# Default parameters
 	RADIUS_METER = 25
-	SAMPLING_DISTANCE = 10 # sparsification of the edges.
-	HEADING_ANGLE_TOLERANCE = 30
-	MAX_PATH_LEN = 20
-	MAX_PATH_DISTANCE_FACTOR = 2.7
-	FILE_CODE = 'input_gps_points' #'gps_points_01-10'
+	SAMPLING_DISTANCE = 20 # sparsification of the edges.
+	HEADING_ANGLE_TOLERANCE = 100
+	FILE_CODE = 'data_uic'
 	DATA_PATH = 'data'
-	noise_percent = -1
-	max_noise_radius = -1
 	drawmap = False
 	(opts, args) = getopt.getopt(sys.argv[1:], "f:m:p:r:s:a:d:h")
 	for o, a in opts:
@@ -42,7 +38,7 @@ if __name__ == '__main__':
 			drawmap = True
 		if o == "-h":
 			print "Usage: python sofa_map.py [-f <file_name>] [-p <file repository>] [-r <clustering_radius>] [-s <sampling_rate>] " \
-			      "[-a <heading angle tolerance>] [-h <help>]\n"
+				  "[-a <heading angle tolerance>] [-h <help>]\n"
 			exit()
 
 	RADIUS_DEGREE = RADIUS_METER * 10e-6
@@ -71,7 +67,7 @@ if __name__ == '__main__':
 			if len(clusters) == 0:
 				# create a new cluster
 				new_cluster = Cluster(cid=len(clusters), nb_points=1, last_seen=point.timestamp, lat=point.lat,
-				                      lon=point.lon, angle=point.angle)
+									  lon=point.lon, angle=point.angle)
 				clusters.append(new_cluster)
 				roadnet.add_node(new_cluster.cid)
 				prev_cluster = new_cluster.cid  # all I need is the index of the new cluster
@@ -80,7 +76,7 @@ if __name__ == '__main__':
 				continue
 			# if there's a cluster within x meters and y angle: add to. Else: create new cluster
 			close_clusters_indices = [clu_index for clu_index in cluster_kdtree.query_ball_point(x=point.get_lonlat(), r=RADIUS_DEGREE, p=2)
-			                          if math.fabs(diffangles(point.angle, clusters[clu_index].angle)) <= HEADING_ANGLE_TOLERANCE ]
+									  if math.fabs(diffangles(point.angle, clusters[clu_index].angle)) <= HEADING_ANGLE_TOLERANCE ]
 
 			if len(close_clusters_indices) == 0:
 				# create a new cluster
@@ -94,7 +90,7 @@ if __name__ == '__main__':
 				# add the point to the cluster
 				pt = geopy.Point(point.get_coordinates())
 				close_clusters_distances = [geopy.distance.distance(pt, geopy.Point(clusters[clu_index].get_coordinates())).meters
-				                            for clu_index in close_clusters_indices]
+											for clu_index in close_clusters_indices]
 				closest_cluster_indx = close_clusters_indices[close_clusters_distances.index(min(close_clusters_distances))]
 				clusters[closest_cluster_indx].add(point)
 				current_cluster = closest_cluster_indx
@@ -103,15 +99,15 @@ if __name__ == '__main__':
 				prev_cluster = current_cluster
 				continue
 
-			edge = [clusters[prev_cluster].get_coordinates(), clusters[current_cluster].get_coordinates()]
+			edge = [clusters[prev_cluster], clusters[current_cluster]]
 			intermediate_clusters = partition_edge(edge, distance_interval=SAMPLING_DISTANCE)
 
 			# Check if the newly created points belong to any existing cluster:
 			intermediate_cluster_ids = []
 			for pt in intermediate_clusters:
 				close_clusters_indices = [clu_index for clu_index in
-				                          cluster_kdtree.query_ball_point(x=pt.get_lonlat(), r=RADIUS_DEGREE, p=2)
-				                          if math.fabs(diffangles(pt.angle, clusters[clu_index].angle)) <= HEADING_ANGLE_TOLERANCE]
+										  cluster_kdtree.query_ball_point(x=pt.get_lonlat(), r=RADIUS_DEGREE, p=2)
+										  if math.fabs(diffangles(pt.angle, clusters[clu_index].angle)) <= HEADING_ANGLE_TOLERANCE]
 
 				if len(close_clusters_indices) == 0:
 					intermediate_cluster_ids.append(-1)
@@ -132,15 +128,15 @@ if __name__ == '__main__':
 					n_cluster_point = intermediate_clusters[idx]
 					# create a new cluster
 					new_cluster = Cluster(cid=len(clusters), nb_points=1, last_seen=point.timestamp, lat=n_cluster_point.lat,
-					                      lon=n_cluster_point.lon, angle=n_cluster_point.angle)
+										  lon=n_cluster_point.lon, angle=n_cluster_point.angle)
 					clusters.append(new_cluster)
 					roadnet.add_node(new_cluster.cid)
 					# recompute the cluster index
 					update_cluster_index = True
 					# create the actual edge:
 					if math.fabs(diffangles(clusters[prev_path_point].angle, new_cluster.angle)) > HEADING_ANGLE_TOLERANCE \
-						and math.fabs(diffangles(vector_direction_re_north(clusters[prev_path_point], new_cluster),
-						                         clusters[prev_path_point].angle )) > HEADING_ANGLE_TOLERANCE:
+						or math.fabs(diffangles(vector_direction_re_north(clusters[prev_path_point], new_cluster),
+												 clusters[prev_path_point].angle )) > HEADING_ANGLE_TOLERANCE:
 						prev_path_point = new_cluster.cid
 						continue
 					# if satisfy_path_condition_distance(prev_path_point, new_cluster.cid, roadnet, clusters, alpha=1.2):

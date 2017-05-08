@@ -6,6 +6,9 @@ import operator
 import geopy
 import geopy.distance
 import math
+import networkx as nx
+from matplotlib import pyplot as plt
+from matplotlib import collections as mc
 
 
 class GpsPoint:
@@ -231,3 +234,29 @@ def vector_direction_re_north(s, d):
 	if angle < 0:
 		angle = angle + 360
 	return angle
+
+def build_roadnet_from_edges(edge_fname='cao_edges.txt'):
+	with open(edge_fname, 'r') as f:
+		lines = [line for line in f]
+
+	# build directed graph
+	g = nx.DiGraph()
+	for i in range(len(lines) / 3):
+		edge_lines = lines[3 * i: 3 * (i + 1)]
+		source = tuple([float(_) for _ in edge_lines[0].strip().split(',')])
+		target = tuple([float(_) for _ in edge_lines[1].strip().split(',')[:2]])
+		g.add_edge(source, target)
+	return g
+
+def draw_network(fname):
+	g = build_roadnet_from_edges(fname)
+	lines = [[s, t] for s, t in g.edges()]
+	lc = mc.LineCollection(lines)
+	fig, ax = plt.subplots()
+	ax.add_collection(lc)
+	ax.autoscale()
+	ax.margins(0.1)
+	#
+	# for s, t in kdd_rn.edges():
+	# 	plt.plot([s[0], t[0]], [s[1], t[1]], color='red')
+	plt.show()

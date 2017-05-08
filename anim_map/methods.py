@@ -6,7 +6,8 @@ import operator
 import geopy
 import geopy.distance
 import math
-
+from matplotlib import pyplot as plt
+from matplotlib import collections as mc
 
 class GpsPoint:
 	def __init__(self, vehicule_id=None, lon=None, lat=None, speed=None, timestamp=None, angle=None, traj_id=None):
@@ -237,3 +238,12 @@ def vector_direction_re_north(s, d):
 	if angle < 0:
 		angle = angle + 360
 	return angle
+
+def draw_roadnet(rn):
+	lines = [[s, t] for s, t in rn.edges()]
+	print len(lines)
+	lc = mc.LineCollection(lines, colors='black', linewidths=2)
+	fig, ax = plt.subplots(facecolor='black', figsize=(14, 10))
+	ax.add_collection(lc)
+	ax.autoscale()
+	plt.show()

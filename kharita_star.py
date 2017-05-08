@@ -12,7 +12,7 @@ import datetime
 import networkx as nx
 from scipy.spatial import cKDTree
 from methods import create_trajectories, diffangles, partition_edge, vector_direction_re_north, Cluster
-
+from matplotlib import pyplot as plt
 
 if __name__ == '__main__':
 	# Default parameters
@@ -51,9 +51,16 @@ if __name__ == '__main__':
 	p_Y = []
 	starting_time = datetime.datetime.now()
 	trajectories = create_trajectories(INPUT_FILE_NAME= '%s/%s.csv' % (DATA_PATH, FILE_CODE), waiting_threshold=21)
+	print 'trajectory_id:', trajectories[0][0].vehicule_id
 
 	starting_time = datetime.datetime.now()
-	for i, trajectory in enumerate(trajectories[:-1]):
+	for i, trajectory in enumerate(trajectories[:2]):
+		# X, Y = [], []
+		# for point in trajectory:
+		# 	X.append(point.lon)
+		# 	Y.append(point.lat)
+		# plt.scatter(X,Y)
+		# plt.show()
 		sys.stdout.write('\rprocessing trajectory: %s / %s' % (i,len(trajectories)))
 		sys.stdout.flush()
 		update_cluster_index = False

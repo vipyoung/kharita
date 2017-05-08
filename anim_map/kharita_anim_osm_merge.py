@@ -14,12 +14,9 @@ from scipy.spatial import cKDTree
 from methods import create_trajectories, diffangles, partition_edge, vector_direction_re_north, Cluster, draw_roadnet
 from matplotlib import pyplot as plt
 from matplotlib import collections as mc
-import copy
-from collections import defaultdict
-from random import shuffle
 import operator
 import copy
-
+import os
 
 def create_proxy(label, marker='s'):
 	line = plt.Line2D((0, 1), (0, 0), color=label, marker=marker, linestyle='')
@@ -53,7 +50,11 @@ def road_color_regarding_ground(edge, weight, ground_map_edges):
 
 def generate_image(list_of_edges, edge_weight, nbr, roardnet, clusters, nb_traj, osm, fig, ax, timestamp, lonlat_to_cid,
                    ground_map_edges):
-	path_animation = '/home/sofiane/projects/2017/kharita/animation_bbx_osm'
+
+	if os.path.exists('/home/sofiane/projects/2017/kharita/animation_bbx_osm'):
+		path_animation = '/home/sofiane/projects/2017/kharita/animation_bbx_osm'
+	else:
+		path_animation = '/home/sabbar/projects/2017/kharita/animation_bbx_osm'
 	print 'generating image:', nbr
 	lines = [[s, t] for s, t in list_of_edges]
 	# colors based on weight
@@ -182,7 +183,7 @@ if __name__ == '__main__':
 	# MAX_PATH_LEN = 20
 	# MAX_PATH_DISTANCE_FACTOR = 2.7
 	FILE_CODE = 'data_bbox'
-	DATA_PATH = '../data'
+	DATA_PATH = 'data'
 
 	drawmap = False
 	(opts, args) = getopt.getopt(sys.argv[1:], "f:m:p:r:s:a:d:h")

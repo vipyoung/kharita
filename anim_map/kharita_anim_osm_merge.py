@@ -178,7 +178,7 @@ if __name__ == '__main__':
 	# Default parameters
 	RADIUS_METER = 25
 	SAMPLING_DISTANCE = 10 # sparsification of the edges.
-	HEADING_ANGLE_TOLERANCE = 45
+	HEADING_ANGLE_TOLERANCE = 10
 	# MAX_PATH_LEN = 20
 	# MAX_PATH_DISTANCE_FACTOR = 2.7
 	FILE_CODE = 'data_bbox'
@@ -221,7 +221,7 @@ if __name__ == '__main__':
 	print 'Sort the gps point stream by timestamp'
 	gps_point_stream = sorted(gps_point_stream, key=operator.attrgetter('timestamp'))
 	trajectories = None
-	update_cluster_index = False
+	update_kd_tree = False
 	prev_cluster = -1
 	current_cluster = -1
 	first_edge = True
@@ -244,28 +244,30 @@ if __name__ == '__main__':
 		p_X.append(point.lon)
 		p_Y.append(point.lat)
 
-		# very first case: enter only once. this should never happen in case of OSM integration.
-		if len(clusters) == 0:
-			# create a new cluster
-			new_cluster = Cluster(cid=len(clusters), nb_points=1, last_seen=point.timestamp, lat=point.lat,
-			                      lon=point.lon, angle=point.angle)
-			clusters.append(new_cluster)
-			lonlat_to_clusterid[new_cluster.get_lonlat()] = new_cluster.cid
-			roadnet.add_node(new_cluster.cid)
-			prev_cluster = new_cluster.cid  # all I need is the index of the new cluster
-			# recompute the cluster index
-			cluster_kdtree = cKDTree([c.get_lonlat() for c in clusters])
-
-			# add the point to its trajectory, to keep track of the last point in trajectory
-			building_trajectories[traj_id] = new_cluster.cid
-			continue
+		# very first case: enter only once. This should never happen in case of OSM integration, thus I'm commenting it.
+		# if len(clusters) == 0:
+		# 	# create a new cluster
+		# 	new_cluster = Cluster(cid=len(clusters), nb_points=1, last_seen=point.timestamp, lat=point.lat,
+		# 	                      lon=point.lon, angle=point.angle)
+		# 	clusters.append(new_cluster)
+		# 	lonlat_to_clusterid[new_cluster.get_lonlat()] = new_cluster.cid
+		# 	roadnet.add_node(new_cluster.cid)
+		# 	prev_cluster = new_cluster.cid  # all I need is the index of the new cluster
+		# 	# recompute the cluster index
+		# 	cluster_kdtree = cKDTree([c.get_lonlat() for c in clusters])
+		#
+		# 	# add the point to its trajectory, to keep track of the last point in trajectory
+		# 	building_trajectories[traj_id] = new_cluster.cid
+		# 	continue
 
 		# if there's a cluster within x meters and y angle: add to. Else: create new cluster
 		nearest_cluster_indices = [clu_index for clu_index in cluster_kdtree.query_ball_point(x=point.get_lonlat(), r=RADIUS_DEGREE, p=2)
 		                           if math.fabs(diffangles(point.angle, clusters[clu_index].angle)) <= HEADING_ANGLE_TOLERANCE]
 
-		# Cluster creating
-		# We need to be more conservative in creating clusters! Add something like a threshold, min number of cars, etc.
+		# *****************
+		# Cluster creation
+		# *****************
+		# TODO: be more conservative in creating clusters! Add something like a threshold, min number of cars, etc.
 		if len(nearest_cluster_indices) == 0:
 			# create a new cluster
 			new_cluster = Cluster(cid=len(clusters), nb_points=1, last_seen=point.timestamp, lat=point.lat, lon=point.lon, angle=point.angle)
@@ -274,7 +276,7 @@ if __name__ == '__main__':
 			roadnet.add_node(new_cluster.cid)
 			current_cluster = new_cluster.cid
 			# recompute the cluster index
-			update_cluster_index = True
+			update_kd_tree = True
 		else:
 			# add the point to the cluster
 			pt = geopy.Point(point.get_coordinates())
@@ -284,14 +286,16 @@ if __name__ == '__main__':
 			clusters[closest_cluster_indx].add(point)
 			current_cluster = closest_cluster_indx
 
-		# Edge creation:
+		# *****************
+		# Edge creation
+		# *****************
 		# case of very first point in the trajectory (has no previous cluster.)
 		if prev_cluster == -1:
 			building_trajectories[traj_id] = current_cluster
 			continue
 
 		edge = [clusters[prev_cluster], clusters[current_cluster]]
-		#TODO: I can add a condition on when to create fictional clusters. E.g., condition on angle diff (prev,curr)
+		# TODO: I can add a condition on when to create fictional clusters. E.g., condition on angle diff (prev,curr)
 		intermediate_fictional_clusters = partition_edge(edge, distance_interval=SAMPLING_DISTANCE)
 
 		# Check if the newly created points belong to any existing cluster:
@@ -323,7 +327,7 @@ if __name__ == '__main__':
 				lonlat_to_clusterid[new_cluster.get_lonlat()] = new_cluster.cid
 				roadnet.add_node(new_cluster.cid)
 				# recompute the clusters kd-tree index
-				update_cluster_index = True
+				update_kd_tree = True
 				# create the actual edge: condition on angle differences only.
 				if math.fabs(diffangles(clusters[prev_path_point].angle, new_cluster.angle)) > HEADING_ANGLE_TOLERANCE \
 					or math.fabs(diffangles(vector_direction_re_north(clusters[prev_path_point], new_cluster),
@@ -357,9 +361,9 @@ if __name__ == '__main__':
 
 		building_trajectories[traj_id] = current_cluster
 		# update the index
-		if update_cluster_index:
+		if update_kd_tree:
 			cluster_kdtree = cKDTree([c.get_lonlat() for c in clusters])
-			update_cluster_index = False
+			update_kd_tree = False
 
 		generate_image(list_of_edges, edge_weight, frame_nb, roadnet, clusters, nb_traj=i, osm=osm_lc, fig=fig,
 		               ax=ax, lonlat_to_cid=lonlat_to_clusterid, timestamp=point.timestamp, ground_map_edges=ground_map_edges)

@@ -1,5 +1,5 @@
 """
-author: sofiane
+author: sofiane abbar
 Create the road network by merging trajectories.
 Consume edges one at a time.
 """

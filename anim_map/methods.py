@@ -247,3 +247,4 @@ def draw_roadnet(rn):
 	ax.add_collection(lc)
 	ax.autoscale()
 	plt.show()
+

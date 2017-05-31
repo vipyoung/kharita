@@ -6,8 +6,11 @@ import operator
 import geopy
 import geopy.distance
 import math
+import networkx as nx
 from matplotlib import pyplot as plt
 from matplotlib import collections as mc
+import os
+
 
 class GpsPoint:
 	def __init__(self, vehicule_id=None, lon=None, lat=None, speed=None, timestamp=None, angle=None, traj_id=None):
@@ -248,3 +251,174 @@ def draw_roadnet(rn):
 	ax.autoscale()
 	plt.show()
 
+def create_proxy(label, marker='s'):
+	line = plt.Line2D((0, 1), (0, 0), color=label, marker=marker, linestyle='')
+	return line
+
+
+def road_color(weight):
+	if weight == 0:
+		return '0.3'
+	if weight == 1:
+		return 'green'
+	return 'white'
+
+def road_color_regarding_ground(edge, weight, ground_map_edges):
+	"""
+	If the edge is new (not part of the ground map) paint it in green.
+	else, for grounp map edges use two colors: gray for un-used segments, white for used ones.
+	:param edge:
+	:param weight:
+	:param ground_map_edges:
+	:return:
+	"""
+
+	if edge not in ground_map_edges:
+		return 'green'
+	if weight == 0:
+		return '0.3'
+	return 'white'
+
+
+
+def generate_image(list_of_edges, edge_weight, nbr, roardnet, clusters, nb_traj, osm, fig, ax, timestamp, lonlat_to_cid,
+                   ground_map_edges):
+
+	if os.path.exists('/home/sofiane/projects/2017/kharita/animation_bbx_osm'):
+		path_animation = '/home/sofiane/projects/2017/kharita/animation_bbx_osm'
+	else:
+		path_animation = '/home/sabbar/projects/2017/kharita/animation_bbx_osm'
+	print 'generating image:', nbr
+	lines = [[s, t] for s, t in list_of_edges]
+	# colors based on weight
+	# colors = [road_color(edge_weight[i]) for i in range(len(lines))]
+
+	# colors based on whether the edge exists in the ground map or not.
+	colors = [road_color_regarding_ground(edge, edge_weight[i], ground_map_edges) for i, edge in enumerate(list_of_edges)]
+	for i, edge in enumerate(list_of_edges):
+		s_delta = timestamp - clusters[lonlat_to_cid[edge[0]]].last_seen
+		t_delta = timestamp - clusters[lonlat_to_cid[edge[1]]].last_seen
+		if (s_delta.days*24*3600 + s_delta.seconds) > 3600 and (t_delta.days*24*3600 + t_delta.seconds) > 3600:
+			colors[i] = 'red'
+
+	lc = mc.LineCollection(lines, colors=colors, linewidths=2)
+	fig, ax = plt.subplots(facecolor='black', figsize=(14, 10))
+	# add OSM every 100 frames
+	# if nbr % 100 == 0:
+	# 	ax.add_collection(copy.copy(osm))
+	ax.add_collection(lc)
+	#plt.plot(t[0], t[1], marker=(3, 0, 90), markersize=10, linestyle='None')
+	plt.plot(t[0], t[1], marker="*", markersize=10, color='red', linestyle='None')
+
+
+
+	# # Intersections in different colors?
+	# outdegree = roadnet.out_degree()
+	# indegree = roadnet.out_degree()
+	# intersections = set([n for n in outdegree if outdegree[n] > 1] + [n for n in indegree if indegree[n] > 1])
+	# X, Y = [], []
+	# for n in intersections:
+	# 	X.append(clusters[n].lon)
+	# 	Y.append(clusters[n].lat)
+	# plt.scatter(X, Y, color='yellow')
+
+	ax.text(0.05, 0.01, 'Time: %s' % (timestamp),
+	        verticalalignment='bottom',
+	        horizontalalignment='left',
+	        transform=ax.transAxes,
+	        color='white', fontsize=10)
+
+	ax.text(0.70, 0.01, '# Edges: %s' % len(list_of_edges),
+	        verticalalignment='bottom',
+	        horizontalalignment='right',
+	        transform=ax.transAxes,
+	        color='white', fontsize=10)
+
+	ax.text(0.95, 0.01, 'Animation: S. Abbar',
+	        verticalalignment='bottom',
+	        horizontalalignment='right',
+	        transform=ax.transAxes,
+	        color='white', fontsize=6)
+
+	ax.autoscale()
+	# ax.margins(0.1)
+	plt.axis('off')
+
+	# legends
+	descriptions = ['Vehicles', 'New Road Seg.', 'Confirmed Road Seg.', 'Unused Road Seg.']
+	# descriptions = ['Vehicles', 'New Road Seg.', 'Confirmed Road Seg.']
+	labels = ['red', 'green', 'white', 'red']
+	pers_markers = ['*', 's', 's', 's']
+	proxies = [create_proxy(item, mark) for item, mark in zip(labels, pers_markers)]
+	ax.legend(proxies, descriptions, fontsize=6, numpoints=1, markerscale=1, ncol=4, bbox_to_anchor=(0.8, -0.05))
+
+	plt.savefig('%s/frame_%s.png' % (path_animation, nbr), format='PNG',
+	            facecolor=fig.get_facecolor(), transparent=True, bbox_inches='tight')
+
+	# ax.clear()
+	# fig.clf()
+	plt.close()
+
+
+def crop_osm_graph(fname):
+	max_lat = 25.302769999999999
+	min_lat = 25.283760000000001
+	max_lon = 51.479749499999997
+	min_lon = 51.458219999999997
+	# use this awk command: awk 'BEGIN {FS=" ";} {if ($1 < 51.479749499999997 && $1 > 51.458219999999997 && $2 < 25.302769999999999 && $2 > 25.283760000000001 && $4 < 51.479749499999997 && $4 > 51.458219999999997 && $5 < 25.302769999999999 && $5 > 25.283760000000001 ) print}' osmmapclusterangle.txt > osm_bbx.csv
+
+
+def build_initial_graph_from_osm(fname):
+	"""
+	Build the OSM graph for a list of edges: source, target.
+	:param fname:
+	:return:
+	"""
+	clusters = []
+	clusters_latlon = []
+	list_of_edges = []
+	edge_weight = []
+	osm_roadnet = nx.DiGraph()
+	now_ts = datetime.datetime.now()
+	with open(fname) as f:
+		for line in f:
+			slon, slat, sang, tlon, tlat, tang = map(float, line.strip().split(' '))
+			if (slat, slon) not in clusters_latlon:
+				new_cluster = Cluster(cid=len(clusters), nb_points=1, last_seen=now_ts, lat=slat, lon=slon, angle=sang)
+				clusters.append(new_cluster)
+				clusters_latlon.append((slat, slon))
+			if (tlat, tlon) not in clusters_latlon:
+				new_cluster = Cluster(cid=len(clusters), nb_points=1, last_seen=now_ts, lat=tlat, lon=tlon, angle=tang)
+				clusters.append(new_cluster)
+				clusters_latlon.append((tlat, tlon))
+			osm_roadnet.add_edge(clusters_latlon.index((slat, slon)), clusters_latlon.index((tlat, tlon)))
+			list_of_edges.append([(slon, slat), (tlon, tlat)])
+			edge_weight.append(0)
+	clusters_latlon = None
+	return clusters, osm_roadnet, list_of_edges, edge_weight
+
+
+def mapMatching(map, trajs):
+	"""
+	Return list of matching points and list of unmatched points from trajectories.
+	:param map: initial map
+	:param trajs: list of trajectories
+	:return: lists of matched points and lists of unmached points.
+	"""
+
+	print 'TBD'
+
+
+def kharitaStar(trajectories, parameters):
+	"""
+	return a road network from trajectories
+	:param trajectories:
+	:return:
+	"""
+	roadnet = nx.DiGraph()
+
+	return roadnet
+
+
+def mergeMaps(map1, map2):
+	return map1+map2

@@ -10,6 +10,7 @@ import networkx as nx
 from matplotlib import pyplot as plt
 from matplotlib import collections as mc
 import os
+import copy
 
 
 class GpsPoint:
@@ -244,11 +245,37 @@ def vector_direction_re_north(s, d):
 
 def draw_roadnet(rn):
 	lines = [[s, t] for s, t in rn.edges()]
-	print len(lines)
+
+	print len(lines), lines[ :10]
 	lc = mc.LineCollection(lines, colors='black', linewidths=2)
 	fig, ax = plt.subplots(facecolor='black', figsize=(14, 10))
 	ax.add_collection(lc)
 	ax.autoscale()
+	plt.show()
+
+def draw_roadnet_id_colored(rn, clusters, matched_nodes, new_nodes, dead_nodes):
+	lines = [[clusters[s].get_lonlat(), clusters[t].get_lonlat()] for s, t in rn.edges()]
+	lc = mc.LineCollection(lines, colors='black', linewidths=1)
+	fig, ax = plt.subplots(facecolor='black', figsize=(14, 10))
+	ax.add_collection(lc)
+	ax.autoscale()
+	X, Y = [], []
+	for pt in new_nodes:
+		X.append(pt[0])
+		Y.append(pt[1])
+	plt.scatter(X, Y, c='green')
+
+	X, Y = [], []
+	for pt in matched_nodes:
+		X.append(pt[0])
+		Y.append(pt[1])
+	plt.scatter(X, Y, c='0.8')
+
+	X, Y = [], []
+	for pt in dead_nodes:
+		X.append(pt[0])
+		Y.append(pt[1])
+	plt.scatter(X, Y, c='red')
 	plt.show()
 
 def create_proxy(label, marker='s'):
@@ -409,15 +436,194 @@ def mapMatching(map, trajs):
 	print 'TBD'
 
 
-def kharitaStar(trajectories, parameters):
+def kharitaStar(parameters):
 	"""
 	return a road network from trajectories
 	:param trajectories:
 	:return:
 	"""
-	roadnet = nx.DiGraph()
 
-	return roadnet
+	# Algorithm parameters
+	FILE_CODE = parameters['file_code']
+	DATA_PATH = parameters['data_path']
+	RADIUS_METER = parameters['radius_meter']
+	RADIUS_DEGREE = parameters['radius_degree']
+	SAMPLING_DISTANCE = parameters['sampling_distance']
+	HEADING_ANGLE_TOLERANCE = parameters['heading_angle']
+	total_points = 0
+	p_X = []
+	p_Y = []
+
+	# Generate Trajectories
+	trajectories = create_trajectories(INPUT_FILE_NAME='%s/%s.csv' % (DATA_PATH, FILE_CODE), waiting_threshold=21)
+
+	# Sort trajectories into a stream of points
+	building_trajectories = dict()
+	gps_point_stream = []
+	for i, trajectory in enumerate(trajectories):
+		for point in trajectory:
+			point.set_traj_id(i)
+			gps_point_stream.append(point)
+	gps_point_stream = sorted(gps_point_stream, key=operator.attrgetter('timestamp'))
+
+	trajectories = None
+	update_kd_tree = False
+	prev_cluster = -1
+	current_cluster = -1
+	first_edge = True
+
+	matched_osm_clusters = []
+	dead_osm_clusters = []
+	new_osm_clusters = []
+
+	# ##################### Incrementality starts here! #################################
+	# Read and prepare the existing map, assume it is coming from OSM.
+	clusters, actual_rn, list_of_edges, edge_weight = build_initial_graph_from_osm(fname='data/osm_bbx.csv')
+	original_osm_clusters_lonlats = [c.get_lonlat() for c in clusters]
+
+	# X, Y =[], []
+	# for clu in clusters:
+	# 	X.append(clu.lon)
+	# 	Y.append(clu.lat)
+	# plt.scatter(X, Y, c='black')
+	# plt.show()
+
+	ground_map_edges = copy.copy(list_of_edges)
+	cluster_kdtree = cKDTree([c.get_lonlat() for c in clusters])
+	lonlat_to_clusterid = {c.get_lonlat():c.cid for c in clusters}
+	roadnet = actual_rn
+
+	for point in gps_point_stream:
+		if point.timestamp < datetime.datetime.strptime('2015-11-05 22:00:00', '%Y-%m-%d %H:%M:%S'):
+			continue
+
+		traj_id = point.traj_id
+		prev_cluster = building_trajectories.get(traj_id, -1)
+		p_X.append(point.lon)
+		p_Y.append(point.lat)
+
+		# if there's a cluster within x meters and y angle: add to. Else: create new cluster
+		nearest_cluster_indices = [clu_index for clu_index in cluster_kdtree.query_ball_point(x=point.get_lonlat(), r=RADIUS_DEGREE, p=2)
+		                           if math.fabs(diffangles(point.angle, clusters[clu_index].angle)) <= HEADING_ANGLE_TOLERANCE]
+
+		# *****************
+		# Cluster creation
+		# *****************
+		# TODO: be more conservative in creating clusters! Add something like a threshold, min number of cars, etc.
+		if len(nearest_cluster_indices) == 0:
+			# create a new cluster
+			new_cluster = Cluster(cid=len(clusters), nb_points=1, last_seen=point.timestamp, lat=point.lat, lon=point.lon, angle=point.angle)
+			clusters.append(new_cluster)
+			lonlat_to_clusterid[new_cluster.get_lonlat()] = new_cluster.cid
+			roadnet.add_node(new_cluster.cid)
+			current_cluster = new_cluster.cid
+			# recompute the cluster index
+			update_kd_tree = True
+			new_osm_clusters.append(new_cluster.get_lonlat())
+			# TODO: Check if we need to create an edge here
+			# *****************
+			# Edge creation
+			# *****************
+			# case of very first point in the trajectory (has no previous cluster.)
+			if prev_cluster == -1:
+				building_trajectories[traj_id] = current_cluster
+				continue
+
+			edge = [clusters[prev_cluster], clusters[current_cluster]]
+			# TODO: I can add a condition on when to create fictional clusters. E.g., condition on angle diff (prev,curr)
+			intermediate_fictional_clusters = partition_edge(edge, distance_interval=SAMPLING_DISTANCE)
+
+			# Check if the newly created points belong to any existing cluster:
+			intermediate_fictional_cluster_ids = []
+			for pt in intermediate_fictional_clusters:
+				nearest_cluster_indices = [clu_index for clu_index in
+				                           cluster_kdtree.query_ball_point(x=pt.get_lonlat(), r=RADIUS_DEGREE, p=2)
+				                           if math.fabs(
+						diffangles(pt.angle, clusters[clu_index].angle)) <= HEADING_ANGLE_TOLERANCE]
+				if len(nearest_cluster_indices) == 0:
+					intermediate_fictional_cluster_ids.append(-1)
+				else:
+					# identify the cluster to which the intermediate cluster belongs
+					PT = geopy.Point(pt.get_coordinates())
+					close_clusters_distances = [
+						geopy.distance.distance(PT, geopy.Point(clusters[clu_index].get_coordinates())).meters for
+						clu_index
+						in nearest_cluster_indices]
+					closest_cluster_indx = nearest_cluster_indices[
+						close_clusters_distances.index(min(close_clusters_distances))]
+					intermediate_fictional_cluster_ids.append(closest_cluster_indx)
+
+			# For each fictional point in segment: if ==-1 create new cluster and link to it, else link to the corresponding cluster
+			prev_path_point = prev_cluster
+			for idx, inter_clus_id in enumerate(intermediate_fictional_cluster_ids):
+				if inter_clus_id == -1:
+					n_cluster_point = intermediate_fictional_clusters[idx]
+					# create a new cluster
+					new_cluster = Cluster(cid=len(clusters), nb_points=1, last_seen=point.timestamp,
+					                      lat=n_cluster_point.lat,
+					                      lon=n_cluster_point.lon, angle=n_cluster_point.angle)
+					clusters.append(new_cluster)
+					lonlat_to_clusterid[new_cluster.get_lonlat()] = new_cluster.cid
+					roadnet.add_node(new_cluster.cid)
+					# recompute the clusters kd-tree index
+					update_kd_tree = True
+					# create the actual edge: condition on angle differences only.
+					if math.fabs(
+							diffangles(clusters[prev_path_point].angle, new_cluster.angle)) > HEADING_ANGLE_TOLERANCE \
+							or math.fabs(diffangles(vector_direction_re_north(clusters[prev_path_point], new_cluster),
+							                        clusters[prev_path_point].angle)) > HEADING_ANGLE_TOLERANCE:
+						prev_path_point = new_cluster.cid
+						continue
+					# if satisfy_path_condition_distance(prev_path_point, new_cluster.cid, roadnet, clusters, alpha=1.2):
+					if (prev_path_point, new_cluster.cid) not in list_of_edges:
+						list_of_edges.append(
+							[clusters[prev_path_point].get_lonlat(), clusters[new_cluster.cid].get_lonlat()])
+						roadnet.add_edge(prev_path_point, new_cluster.cid)
+						edge_weight.append(1)
+					else:
+						edge_weight[list_of_edges.index(
+							[clusters[prev_path_point].get_lonlat(), clusters[new_cluster.cid].get_lonlat()])] += 1
+					prev_path_point = new_cluster.cid
+				else:
+					if (prev_path_point, inter_clus_id) not in roadnet.edges():
+						list_of_edges.append(
+							[clusters[prev_path_point].get_lonlat(), clusters[inter_clus_id].get_lonlat()])
+						edge_weight.append(1)
+						roadnet.add_edge(prev_path_point, inter_clus_id)
+					else:
+						edge_weight[list_of_edges.index(
+							[clusters[prev_path_point].get_lonlat(), clusters[inter_clus_id].get_lonlat()])] += 1
+					prev_path_point = inter_clus_id
+					clusters[inter_clus_id].add(intermediate_fictional_clusters[idx])
+			if (len(intermediate_fictional_cluster_ids) == 0 or intermediate_fictional_cluster_ids[
+				-1] != current_cluster) and \
+					((prev_path_point, current_cluster) not in roadnet.edges()):
+				list_of_edges.append([clusters[prev_path_point].get_lonlat(), clusters[current_cluster].get_lonlat()])
+				edge_weight.append(1)
+				roadnet.add_edge(prev_path_point, current_cluster)
+			elif (prev_path_point, current_cluster) in roadnet.edges():
+				edge_weight[list_of_edges.index(
+					[clusters[prev_path_point].get_lonlat(), clusters[current_cluster].get_lonlat()])] += 1
+			building_trajectories[traj_id] = current_cluster
+
+		else:
+			# add the point to the cluster
+			pt = geopy.Point(point.get_coordinates())
+			close_clusters_distances = [geopy.distance.distance(pt, geopy.Point(clusters[clu_index].get_coordinates())).meters
+			                            for clu_index in nearest_cluster_indices]
+			closest_cluster_indx = nearest_cluster_indices[close_clusters_distances.index(min(close_clusters_distances))]
+			clusters[closest_cluster_indx].add(point)
+			current_cluster = closest_cluster_indx
+			if clusters[closest_cluster_indx].get_lonlat() in original_osm_clusters_lonlats:
+				matched_osm_clusters.append(clusters[closest_cluster_indx].get_lonlat())
+		if update_kd_tree:
+			cluster_kdtree = cKDTree([c.get_lonlat() for c in clusters])
+			update_kd_tree = False
+	dead_osm_clusters = [c for c in original_osm_clusters_lonlats if c not in matched_osm_clusters]
+	print '# new osm clusters:', len(new_osm_clusters)
+	print '# matched osm clusters:', len(matched_osm_clusters)
+	print '# dead osm clusters:', len(dead_osm_clusters)
+	return roadnet, clusters, matched_osm_clusters, new_osm_clusters, dead_osm_clusters
 
 
 def mergeMaps(map1, map2):

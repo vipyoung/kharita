@@ -14,15 +14,15 @@ import operator
 import copy
 
 if __name__ == '__main__':
-	# For the animation:
-	lonlat_to_clusterid = dict()
-	list_of_edges = []
-	edge_weight = []
-	frame_nb = 0
-	fig, ax = plt.subplots(facecolor='black')
-	osm_rn = nx.read_gpickle('osm_qmic_roads.gpickle')
-	osm_lines = lines = [[s, t] for s, t in osm_rn.edges()]
-	osm_lc = mc.LineCollection(osm_lines, colors=['0.2' for _ in range(len(osm_lines))])
+	# # For the animation:
+	# lonlat_to_clusterid = dict()
+	# list_of_edges = []
+	# edge_weight = []
+	# frame_nb = 0
+	# fig, ax = plt.subplots(facecolor='black')
+	# osm_rn = nx.read_gpickle('osm_qmic_roads.gpickle')
+	# osm_lines = lines = [[s, t] for s, t in osm_rn.edges()]
+	# osm_lc = mc.LineCollection(osm_lines, colors=['0.2' for _ in range(len(osm_lines))])
 
 	# Default parameters
 	RADIUS_METER = 25
@@ -54,124 +54,30 @@ if __name__ == '__main__':
 			exit()
 
 	RADIUS_DEGREE = RADIUS_METER * 10e-6
-	total_points = 0
-	p_X = []
-	p_Y = []
+
+	parameters = {'file_code': FILE_CODE,
+	              'data_path': DATA_PATH,
+	              'radius_meter': RADIUS_METER,
+	              'radius_degree': RADIUS_DEGREE,
+	              'sampling_distance': SAMPLING_DISTANCE,
+	              'heading_angle': HEADING_ANGLE_TOLERANCE
+	              }
 	starting_time = datetime.datetime.now()
-	trajectories = create_trajectories(INPUT_FILE_NAME='../%s/%s.csv' % (DATA_PATH, FILE_CODE), waiting_threshold=21)
-	# push points as they are seen
-	print 'creating gps point stream / nb trajectories %s' % len(trajectories)
-	building_trajectories = dict()
-	gps_point_stream = []
-	for i, trajectory in enumerate(trajectories):
-		for point in trajectory:
-			point.set_traj_id(i)
-			gps_point_stream.append(point)
-	print 'Sort the gps point stream by timestamp'
-	gps_point_stream = sorted(gps_point_stream, key=operator.attrgetter('timestamp'))
-	trajectories = None
-	update_kd_tree = False
-	prev_cluster = -1
-	current_cluster = -1
-	first_edge = True
-
-	covered_osm_clusters = []
-	dead_osm_clusters = []
-	new_trajectory_clusters = []
-
-	# ##################### Incrementality starts here! #################################
-	# Read and prepare the existing map, assume it is coming from OSM.
-	clusters, actual_rn, list_of_edges, edge_weight = build_initial_graph_from_osm(fname='../data/osm_bbx.csv')
-	original_osm_clusters_lonlats = [c.get_lonlat() for c in clusters]
-
-	# X, Y =[], []
-	# for clu in clusters:
-	# 	X.append(clu.lon)
-	# 	Y.append(clu.lat)
-	# plt.scatter(X, Y, c='black')
-	# plt.show()
-
-	ground_map_edges = copy.copy(list_of_edges)
-	cluster_kdtree = cKDTree([c.get_lonlat() for c in clusters])
-	lonlat_to_clusterid = {c.get_lonlat():c.cid for c in clusters}
-	roadnet = actual_rn
 	# generate_image(list_of_edges, edge_weight, frame_nb, roadnet, clusters, nb_traj=i, osm=osm_lc, fig=fig, ax=ax,
 	#               lonlat_to_cid=lonlat_to_clusterid, timestamp=datetime.datetime.now(), ground_map_edges=ground_map_edges)
 
 
 	# TODO: create a mapmatching function in methods
 
-	matchedTraj, unmatchedTraj = mapMatching(roadnet, trajectories)
-	inferredMap = kharitaStar(unmatchedTraj, parameters='fusg')
-	newMap = mergeMaps(roadnet, inferredMap)
+	# matchedTraj, unmatchedTraj = mapMatching(roadnet, trajectories)
+	roadnet, clusters, matched_osm_clusters, new_osm_clusters, dead_osm_clusters = kharitaStar(parameters=parameters)
+	print roadnet.number_of_edges(), roadnet.number_of_nodes()
+	draw_roadnet_id_colored(roadnet, clusters, matched_osm_clusters, new_osm_clusters, dead_osm_clusters)
+	#newMap = mergeMaps(roadnet, inferredMap)
 
 
 
-	for point in gps_point_stream:
-		if point.timestamp < datetime.datetime.strptime('2015-11-05 22:00:00', '%Y-%m-%d %H:%M:%S'):
-			continue
 
-		traj_id = point.traj_id
-		prev_cluster = building_trajectories.get(traj_id, -1)
-		p_X.append(point.lon)
-		p_Y.append(point.lat)
-
-		# if there's a cluster within x meters and y angle: add to. Else: create new cluster
-		nearest_cluster_indices = [clu_index for clu_index in cluster_kdtree.query_ball_point(x=point.get_lonlat(), r=RADIUS_DEGREE, p=2)
-		                           if math.fabs(diffangles(point.angle, clusters[clu_index].angle)) <= HEADING_ANGLE_TOLERANCE]
-
-		# *****************
-		# Cluster creation
-		# *****************
-		# TODO: be more conservative in creating clusters! Add something like a threshold, min number of cars, etc.
-		if len(nearest_cluster_indices) == 0:
-			# create a new cluster
-			new_cluster = Cluster(cid=len(clusters), nb_points=1, last_seen=point.timestamp, lat=point.lat, lon=point.lon, angle=point.angle)
-			clusters.append(new_cluster)
-			lonlat_to_clusterid[new_cluster.get_lonlat()] = new_cluster.cid
-			roadnet.add_node(new_cluster.cid)
-			current_cluster = new_cluster.cid
-			# recompute the cluster index
-			update_kd_tree = True
-			new_trajectory_clusters.append(new_cluster.get_lonlat())
-		else:
-			# add the point to the cluster
-			pt = geopy.Point(point.get_coordinates())
-			close_clusters_distances = [geopy.distance.distance(pt, geopy.Point(clusters[clu_index].get_coordinates())).meters
-			                            for clu_index in nearest_cluster_indices]
-			closest_cluster_indx = nearest_cluster_indices[close_clusters_distances.index(min(close_clusters_distances))]
-			clusters[closest_cluster_indx].add(point)
-			current_cluster = closest_cluster_indx
-			if clusters[closest_cluster_indx].get_lonlat() in original_osm_clusters_lonlats:
-				covered_osm_clusters.append(clusters[closest_cluster_indx].get_lonlat())
-		if update_kd_tree:
-			cluster_kdtree = cKDTree([c.get_lonlat() for c in clusters])
-			update_kd_tree = False
-	print 'len new clusters:', len(new_trajectory_clusters)
-
-	print 'covered osm clusters:', len(covered_osm_clusters)
-
-	dead_osm_clusters = [c for c in original_osm_clusters_lonlats if c not in covered_osm_clusters]
-
-	X, Y = [], []
-	for pt in new_trajectory_clusters:
-		X.append(pt[0])
-		Y.append(pt[1])
-	plt.scatter(X, Y, c='green')
-
-	X, Y = [], []
-	for pt in covered_osm_clusters:
-		X.append(pt[0])
-		Y.append(pt[1])
-	plt.scatter(X, Y, c='0.8')
-
-	X, Y = [], []
-	for pt in dead_osm_clusters:
-		X.append(pt[0])
-		Y.append(pt[1])
-	plt.scatter(X, Y, c='red')
-
-	plt.show()
 		# TODO: deal with edges later
 		# # *****************
 		# # Edge creation

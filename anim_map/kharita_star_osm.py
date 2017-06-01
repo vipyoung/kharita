@@ -25,9 +25,9 @@ if __name__ == '__main__':
 	# osm_lc = mc.LineCollection(osm_lines, colors=['0.2' for _ in range(len(osm_lines))])
 
 	# Default parameters
-	RADIUS_METER = 25
-	SAMPLING_DISTANCE = 10 # sparsification of the edges.
-	HEADING_ANGLE_TOLERANCE = 10
+	RADIUS_METER = 35
+	SAMPLING_DISTANCE = 20 # sparsification of the edges.
+	HEADING_ANGLE_TOLERANCE = 25
 	# MAX_PATH_LEN = 20
 	# MAX_PATH_DISTANCE_FACTOR = 2.7
 	FILE_CODE = 'data_bbox'

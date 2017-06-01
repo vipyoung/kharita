@@ -243,6 +243,7 @@ def vector_direction_re_north(s, d):
 		angle = angle + 360
 	return angle
 
+
 def draw_roadnet(rn):
 	lines = [[s, t] for s, t in rn.edges()]
 
@@ -253,30 +254,33 @@ def draw_roadnet(rn):
 	ax.autoscale()
 	plt.show()
 
+
 def draw_roadnet_id_colored(rn, clusters, matched_nodes, new_nodes, dead_nodes):
+	print 'Plotting the map'
 	lines = [[clusters[s].get_lonlat(), clusters[t].get_lonlat()] for s, t in rn.edges()]
 	lc = mc.LineCollection(lines, colors='black', linewidths=1)
-	fig, ax = plt.subplots(facecolor='black', figsize=(14, 10))
+	fig, ax = plt.subplots(figsize=(14, 10))
 	ax.add_collection(lc)
 	ax.autoscale()
 	X, Y = [], []
 	for pt in new_nodes:
 		X.append(pt[0])
 		Y.append(pt[1])
-	plt.scatter(X, Y, c='green')
+	plt.scatter(X, Y, c='green', s=40)
 
 	X, Y = [], []
 	for pt in matched_nodes:
 		X.append(pt[0])
 		Y.append(pt[1])
-	plt.scatter(X, Y, c='0.8')
+	plt.scatter(X, Y, c='0.8', s=40)
 
 	X, Y = [], []
 	for pt in dead_nodes:
 		X.append(pt[0])
 		Y.append(pt[1])
-	plt.scatter(X, Y, c='red')
+	plt.scatter(X, Y, c='red', s=40)
 	plt.show()
+
 
 def create_proxy(label, marker='s'):
 	line = plt.Line2D((0, 1), (0, 0), color=label, marker=marker, linestyle='')
@@ -289,6 +293,7 @@ def road_color(weight):
 	if weight == 1:
 		return 'green'
 	return 'white'
+
 
 def road_color_regarding_ground(edge, weight, ground_map_edges):
 	"""
@@ -305,7 +310,6 @@ def road_color_regarding_ground(edge, weight, ground_map_edges):
 	if weight == 0:
 		return '0.3'
 	return 'white'
-
 
 
 def generate_image(list_of_edges, edge_weight, nbr, roardnet, clusters, nb_traj, osm, fig, ax, timestamp, lonlat_to_cid,
@@ -425,17 +429,6 @@ def build_initial_graph_from_osm(fname):
 	return clusters, osm_roadnet, list_of_edges, edge_weight
 
 
-def mapMatching(map, trajs):
-	"""
-	Return list of matching points and list of unmatched points from trajectories.
-	:param map: initial map
-	:param trajs: list of trajectories
-	:return: lists of matched points and lists of unmached points.
-	"""
-
-	print 'TBD'
-
-
 def kharitaStar(parameters):
 	"""
 	return a road network from trajectories
@@ -443,6 +436,7 @@ def kharitaStar(parameters):
 	:return:
 	"""
 
+	outf = open('distances.txt', 'w')
 	# Algorithm parameters
 	FILE_CODE = parameters['file_code']
 	DATA_PATH = parameters['data_path']
@@ -458,6 +452,7 @@ def kharitaStar(parameters):
 	trajectories = create_trajectories(INPUT_FILE_NAME='%s/%s.csv' % (DATA_PATH, FILE_CODE), waiting_threshold=21)
 
 	# Sort trajectories into a stream of points
+	print 'Computing points stream'
 	building_trajectories = dict()
 	gps_point_stream = []
 	for i, trajectory in enumerate(trajectories):
@@ -478,7 +473,7 @@ def kharitaStar(parameters):
 
 	# ##################### Incrementality starts here! #################################
 	# Read and prepare the existing map, assume it is coming from OSM.
-	clusters, actual_rn, list_of_edges, edge_weight = build_initial_graph_from_osm(fname='data/osm_bbx.csv')
+	clusters, roadnet, list_of_edges, edge_weight = build_initial_graph_from_osm(fname='data/osm_bbx.csv')
 	original_osm_clusters_lonlats = [c.get_lonlat() for c in clusters]
 
 	# X, Y =[], []
@@ -488,14 +483,14 @@ def kharitaStar(parameters):
 	# plt.scatter(X, Y, c='black')
 	# plt.show()
 
-	ground_map_edges = copy.copy(list_of_edges)
 	cluster_kdtree = cKDTree([c.get_lonlat() for c in clusters])
-	lonlat_to_clusterid = {c.get_lonlat():c.cid for c in clusters}
-	roadnet = actual_rn
+	#lonlat_to_clusterid = {c.get_lonlat():c.cid for c in clusters}
 
+	print 'Matching trajectories to OSM'
 	for point in gps_point_stream:
 		if point.timestamp < datetime.datetime.strptime('2015-11-05 22:00:00', '%Y-%m-%d %H:%M:%S'):
 			continue
+
 
 		traj_id = point.traj_id
 		prev_cluster = building_trajectories.get(traj_id, -1)
@@ -506,6 +501,13 @@ def kharitaStar(parameters):
 		nearest_cluster_indices = [clu_index for clu_index in cluster_kdtree.query_ball_point(x=point.get_lonlat(), r=RADIUS_DEGREE, p=2)
 		                           if math.fabs(diffangles(point.angle, clusters[clu_index].angle)) <= HEADING_ANGLE_TOLERANCE]
 
+
+		if prev_cluster != -1:
+			temp_dist = geopy.distance.distance(geopy.Point(clusters[prev_cluster].get_coordinates()), geopy.Point(point.get_coordinates())).meters
+			if temp_dist > 200:
+				continue
+			outf.write('%s\n' % temp_dist)
+
 		# *****************
 		# Cluster creation
 		# *****************
@@ -514,12 +516,13 @@ def kharitaStar(parameters):
 			# create a new cluster
 			new_cluster = Cluster(cid=len(clusters), nb_points=1, last_seen=point.timestamp, lat=point.lat, lon=point.lon, angle=point.angle)
 			clusters.append(new_cluster)
-			lonlat_to_clusterid[new_cluster.get_lonlat()] = new_cluster.cid
+			#lonlat_to_clusterid[new_cluster.get_lonlat()] = new_cluster.cid
 			roadnet.add_node(new_cluster.cid)
 			current_cluster = new_cluster.cid
 			# recompute the cluster index
 			update_kd_tree = True
 			new_osm_clusters.append(new_cluster.get_lonlat())
+
 			# TODO: Check if we need to create an edge here
 			# *****************
 			# Edge creation
@@ -531,11 +534,11 @@ def kharitaStar(parameters):
 
 			edge = [clusters[prev_cluster], clusters[current_cluster]]
 			# TODO: I can add a condition on when to create fictional clusters. E.g., condition on angle diff (prev,curr)
-			intermediate_fictional_clusters = partition_edge(edge, distance_interval=SAMPLING_DISTANCE)
+			intermediate_fictional_points = partition_edge(edge, distance_interval=SAMPLING_DISTANCE)
 
 			# Check if the newly created points belong to any existing cluster:
 			intermediate_fictional_cluster_ids = []
-			for pt in intermediate_fictional_clusters:
+			for pt in intermediate_fictional_points:
 				nearest_cluster_indices = [clu_index for clu_index in
 				                           cluster_kdtree.query_ball_point(x=pt.get_lonlat(), r=RADIUS_DEGREE, p=2)
 				                           if math.fabs(
@@ -557,14 +560,16 @@ def kharitaStar(parameters):
 			prev_path_point = prev_cluster
 			for idx, inter_clus_id in enumerate(intermediate_fictional_cluster_ids):
 				if inter_clus_id == -1:
-					n_cluster_point = intermediate_fictional_clusters[idx]
+					n_cluster_point = intermediate_fictional_points[idx]
 					# create a new cluster
 					new_cluster = Cluster(cid=len(clusters), nb_points=1, last_seen=point.timestamp,
 					                      lat=n_cluster_point.lat,
 					                      lon=n_cluster_point.lon, angle=n_cluster_point.angle)
 					clusters.append(new_cluster)
-					lonlat_to_clusterid[new_cluster.get_lonlat()] = new_cluster.cid
+					# lonlat_to_clusterid[new_cluster.get_lonlat()] = new_cluster.cid
 					roadnet.add_node(new_cluster.cid)
+					new_osm_clusters.append(new_cluster.get_lonlat())
+
 					# recompute the clusters kd-tree index
 					update_kd_tree = True
 					# create the actual edge: condition on angle differences only.
@@ -576,8 +581,7 @@ def kharitaStar(parameters):
 						continue
 					# if satisfy_path_condition_distance(prev_path_point, new_cluster.cid, roadnet, clusters, alpha=1.2):
 					if (prev_path_point, new_cluster.cid) not in list_of_edges:
-						list_of_edges.append(
-							[clusters[prev_path_point].get_lonlat(), clusters[new_cluster.cid].get_lonlat()])
+						list_of_edges.append([clusters[prev_path_point].get_lonlat(), clusters[new_cluster.cid].get_lonlat()])
 						roadnet.add_edge(prev_path_point, new_cluster.cid)
 						edge_weight.append(1)
 					else:
@@ -585,16 +589,16 @@ def kharitaStar(parameters):
 							[clusters[prev_path_point].get_lonlat(), clusters[new_cluster.cid].get_lonlat()])] += 1
 					prev_path_point = new_cluster.cid
 				else:
-					if (prev_path_point, inter_clus_id) not in roadnet.edges():
-						list_of_edges.append(
-							[clusters[prev_path_point].get_lonlat(), clusters[inter_clus_id].get_lonlat()])
-						edge_weight.append(1)
-						roadnet.add_edge(prev_path_point, inter_clus_id)
-					else:
-						edge_weight[list_of_edges.index(
-							[clusters[prev_path_point].get_lonlat(), clusters[inter_clus_id].get_lonlat()])] += 1
+					# if (prev_path_point, inter_clus_id) not in roadnet.edges():
+					# 	list_of_edges.append(
+					# 		[clusters[prev_path_point].get_lonlat(), clusters[inter_clus_id].get_lonlat()])
+					# 	edge_weight.append(1)
+					# 	roadnet.add_edge(prev_path_point, inter_clus_id)
+					# else:
+					# 	edge_weight[list_of_edges.index(
+					# 		[clusters[prev_path_point].get_lonlat(), clusters[inter_clus_id].get_lonlat()])] += 1
 					prev_path_point = inter_clus_id
-					clusters[inter_clus_id].add(intermediate_fictional_clusters[idx])
+					clusters[inter_clus_id].add(intermediate_fictional_points[idx])
 			if (len(intermediate_fictional_cluster_ids) == 0 or intermediate_fictional_cluster_ids[
 				-1] != current_cluster) and \
 					((prev_path_point, current_cluster) not in roadnet.edges()):
@@ -626,5 +630,12 @@ def kharitaStar(parameters):
 	return roadnet, clusters, matched_osm_clusters, new_osm_clusters, dead_osm_clusters
 
 
-def mergeMaps(map1, map2):
-	return map1+map2
+def removePathsOSM(osm_rn, nb_paths):
+	"""
+	Remove nb_paths from OSM Road Network. A path is a sequence of edges between two intersections.
+	:param osm_rn: initial OSM_RN
+	:param nb_paths: number of paths to remove
+	:return: a new OSM_RN, list of removed segments.
+	"""
+
+	# get all nodes of degree higher than 2 (intersections)

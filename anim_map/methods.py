@@ -13,6 +13,7 @@ import os
 import copy
 import pickle
 from random import shuffle
+import fiona
 
 
 class GpsPoint:
@@ -795,3 +796,27 @@ def point_segment_distance(px, py, x1, y1, x2, y2):
 		dx = px - near_x
 		dy = py - near_y
 	return math.hypot(dx, dy)
+
+
+def build_road_network_from_shapefile(shape_file):
+	"""
+	This function builds a road graph from  road shapefile.
+	Use fiona to read the shape file.
+	:param shape_file: the road shape file of the city
+	:return: a graph
+	"""
+
+	g = nx.Graph()
+	sh = fiona.open(shape_file)
+	for obj in sh:
+		try:
+			path = obj['geometry']['coordinates']
+			g.add_path(path)
+		except:
+			continue
+	return g
+
+if __name__ =='__main__':
+	g = build_road_network_from_shapefile(shape_file='../data/shapefiles/doha_roads_matching_kharita.shp')
+	draw_roadnet(g)
+	print g.number_of_edges(), g.number_of_nodes()

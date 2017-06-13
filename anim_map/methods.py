@@ -249,8 +249,6 @@ def vector_direction_re_north(s, d):
 
 def draw_roadnet(rn):
 	lines = [[s, t] for s, t in rn.edges()]
-
-	print len(lines), lines[ :10]
 	lc = mc.LineCollection(lines, colors='black', linewidths=2)
 	fig, ax = plt.subplots(facecolor='black', figsize=(14, 10))
 	ax.add_collection(lc)
@@ -806,12 +804,15 @@ def build_road_network_from_shapefile(shape_file):
 	:return: a graph
 	"""
 
-	g = nx.Graph()
+	g = nx.DiGraph()
 	sh = fiona.open(shape_file)
 	for obj in sh:
 		try:
 			path = obj['geometry']['coordinates']
 			g.add_path(path)
+			if obj['properties']['oneway'] == 0:
+				path.reverse()
+				g.add_path(path)
 		except:
 			continue
 	return g

@@ -24,7 +24,7 @@ if __name__ == '__main__':
 	# MAX_PATH_DISTANCE_FACTOR = 2.7
 	# FILE_CODE = 'data_bbox'
 	FILE_CODE = 'data_2015-10-01'
-	DATA_PATH = 'data'
+	DATA_PATH = '../data'
 	MAP_FILE = 'osmmapclusterangle.txt'
 
 	drawmap = False
@@ -48,7 +48,7 @@ if __name__ == '__main__':
 			exit()
 
 	RADIUS_DEGREE = RADIUS_METER * 10e-6
-	tempFiles = 'load' # or 'dump'
+	tempFiles = 'dump' # or 'dump'
 
 	parameters = {'file_code': FILE_CODE,
 	              'data_path': DATA_PATH,
@@ -63,6 +63,7 @@ if __name__ == '__main__':
 
 	if tempFiles == 'dump':
 		roadnet, clusters, matched_osm_clusters, new_osm_clusters, dead_osm_clusters = kharitaStar(parameters=parameters)
+		draw_roadnet(roadnet)
 	elif tempFiles == 'load':
 		roadnet = pickle.load(open('../data/tempFiles/roadnet.pickle', 'r'))
 		clusters = pickle.load(open('../data/tempFiles/clusters.pickle', 'r'))
@@ -85,12 +86,9 @@ if __name__ == '__main__':
 
 	# Remove some paths from OSM:
 	# removedPaths = removePathsOSM(roadnet,nb_paths=3)
-	print removePathsOSM()
 
 	#draw_roadnet_id_colored(roadnet, clusters, matched_osm_clusters, new_osm_clusters, dead_osm_clusters)
 	#newMap = mergeMaps(roadnet, inferredMap)
-
-
 
 
 		# TODO: deal with edges later

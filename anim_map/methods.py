@@ -14,7 +14,8 @@ import copy
 import pickle
 from random import shuffle
 import fiona
-
+import random
+from sys import stdout
 
 class GpsPoint:
 	def __init__(self, vehicule_id=None, lon=None, lat=None, speed=None, timestamp=None, angle=None, traj_id=None):
@@ -251,6 +252,47 @@ def draw_roadnet(rn):
 	lines = [[s, t] for s, t in rn.edges()]
 	lc = mc.LineCollection(lines, colors='black', linewidths=2)
 	fig, ax = plt.subplots(facecolor='black', figsize=(14, 10))
+	ax.add_collection(lc)
+	ax.autoscale()
+	plt.show()
+
+def draw_roadnet_and_paths(rn, paths):
+	lines = [[s, t] for s, t in rn.edges()]
+	lc = mc.LineCollection(lines, colors='black', linewidths=2)
+	fig, ax = plt.subplots(facecolor='black', figsize=(14, 10))
+	ax.add_collection(lc)
+
+	lines = []
+	for path in paths:
+		lines += [[path[i], path[i+1]] for i in range(len(path)-1)]
+		plt.scatter([x for x,y in path], [y for x,y in path], c='red', s=70)
+	lc = mc.LineCollection(lines, colors='red', linewidths=2)
+	ax.add_collection(lc)
+	ax.autoscale()
+	plt.show()
+
+
+def draw_roadnet_osm_path(osm_rn, our_rn, missing_paths):
+
+	fig, ax = plt.subplots(facecolor='black', figsize=(14, 10))
+
+	# OSM Map
+	lines = [[s, t] for s, t in osm_rn.edges()]
+	lc = mc.LineCollection(lines, colors='black', linewidths=2)
+	ax.add_collection(lc)
+
+	# Our MAP
+	lines = [[s, t] for s, t in our_rn.edges()]
+	lc = mc.LineCollection(lines, colors='blue', linewidths=2)
+	ax.add_collection(lc)
+
+	# Missing Segments
+	lines = []
+	for path in paths:
+		lines += [[path[i], path[i+1]] for i in range(len(path)-1)]
+		plt.scatter([x for x,y in path], [y for x,y in path], c='red', s=70)
+
+	lc = mc.LineCollection(lines, colors='red', linewidths=2)
 	ax.add_collection(lc)
 	ax.autoscale()
 	plt.show()
@@ -539,7 +581,7 @@ def kharitaStar(parameters):
 	# Read and prepare the existing map, assume it is coming from OSM.
 	print 'reading OSM MAP'
 	clusters, original_osm_clusters_lonlats, roadnet, list_of_edges, edge_weight = \
-		build_initial_graph_from_osm_new(cluster_file='data/osm_clusters_id.txt', edge_file='data/osm_edges_id.txt')
+		build_initial_graph_from_osm_new(cluster_file='../data/osm_clusters_id.txt', edge_file='../data/osm_edges_id.txt')
 	print 'nb_edges:', roadnet.number_of_edges(), roadnet.number_of_nodes()
 	# removePathsOSM(roadnet, 4)
 
@@ -554,7 +596,11 @@ def kharitaStar(parameters):
 	#lonlat_to_clusterid = {c.get_lonlat():c.cid for c in clusters}
 
 	print 'Matching trajectories to OSM'
-	for point in gps_point_stream:
+	cpt = 0
+	for point in gps_point_stream[:5000]:
+		stdout.write("\r%d out of %d" % (cpt, len(gps_point_stream)))
+		stdout.flush()
+		cpt += 1
 		# if point.timestamp < datetime.datetime.strptime('2015-11-05 22:00:00', '%Y-%m-%d %H:%M:%S'):
 		# 	continue
 		# if point.timestamp < datetime.datetime.strptime('2015-10-01 22:00:00', '%Y-%m-%d %H:%M:%S'):
@@ -713,7 +759,8 @@ def kharitaStar(parameters):
 
 def removePathsOSM(osm_rn, nb_paths):
 	"""
-	Remove nb_paths from OSM Road Network. A path is a sequence of edges between two intersections.
+	Remove nb_paths from OSM Road Network.
+	A path is a sequence of edges between two intersections.
 	:param osm_rn: initial OSM_RN
 	:param nb_paths: number of paths to remove
 	:return: a new OSM_RN, list of removed segments.
@@ -721,19 +768,36 @@ def removePathsOSM(osm_rn, nb_paths):
 
 	# get all nodes of degree higher than 2 (intersections)
 	removed_segments = []
-	intersections = [node for node in osm_rn.nodes() if osm_rn.degree(node)>2]
+	intersections = [node for node in osm_rn.nodes() if osm_rn.degree(node) > 2]
 	print '# intersections:', len(intersections)
 
 	# remove intersections that have an intersection as an immediate neighbor
-	new_intersections = [node for node in intersections if set(nx.neighbors(osm_rn, node)).intersection(intersections) == []]
+	new_intersections = [node for node in intersections if len(set(osm_rn.successors(node)).intersection(intersections)) == 0]
 	print 'relevant intersections:', len(new_intersections)
 	shuffle(new_intersections)
 	paths = []
-	for i in range(nb_paths):
-		source = new_intersections[i]
-		target = new_intersections[i+1]
-		path = nx.shortest_path(osm_rn, source, target)
+
+	# identify paths between two intersections such that the path doesn't have an intersection in the middle.
+	while len(paths) < nb_paths:
+		path = []
+		source = random.choice(new_intersections)
+		path = [source]
+		succ = osm_rn.successors(source)
+		relevant_succ = list(set(succ).difference([source]))
+		if len(relevant_succ) == 0:
+			continue
+		next_node = random.choice(relevant_succ)
+		while osm_rn.degree(next_node) <= 2:
+			path.append(next_node)
+			next_node = random.choice(nx.neighbors(osm_rn, next_node))
+		path.append(next_node)
 		paths.append(path)
+	# identify random paths between intersections.
+	# for i in range(nb_paths):
+	# 	source = new_intersections[i]
+	# 	target = new_intersections[i+1]
+	# 	path = nx.shortest_path(osm_rn, source, target)
+	# 	paths.append(path)
 	return paths
 
 
@@ -817,7 +881,28 @@ def build_road_network_from_shapefile(shape_file):
 			continue
 	return g
 
+
+def build_road_network_from_rade(fname):
+	"""
+	Create simple directed graph from Rade's file.
+	:param fname: input file
+	:return: networkx directed graph
+	"""
+	g = nx.DiGraph()
+	with open(fname) as f:
+		for line in f:
+			x = map(float, line.split(' '))
+			g.add_edge(tuple(x[0: 2]), tuple(x[3: 5]))
+	return g
+
+
 if __name__ =='__main__':
-	g = build_road_network_from_shapefile(shape_file='../data/shapefiles/doha_roads_matching_kharita.shp')
-	draw_roadnet(g)
-	print g.number_of_edges(), g.number_of_nodes()
+	rade_g = build_road_network_from_rade('../data/osm_map_rade_20170604.txt')
+	osm_g = build_road_network_from_shapefile(shape_file='../data/shapefiles/doha_roads_matching_kharita.shp')
+
+	# draw_roadnet(g)
+	# nx.write_gpickle(g, '../data/doha_roads_matching_kharita.gpickle')
+	paths = removePathsOSM(osm_g, 4)
+	draw_roadnet_osm_path(osm_rn=osm_g, our_rn=rade_g, missing_paths=paths)
+
+

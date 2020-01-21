@@ -24,10 +24,11 @@ def angledist(a1, a2):
     return(min(abs(a1-a2),abs((a1-a2) % 360),abs((a2-a1) % 360),abs(a2-a1)))
 
 
-def getdata(nsamples,datafile,datestart,datestr):
+def getdata(nsamples, datafile, datestart, datestr):
 #3233678911,1080020,83,2015-10-03 06:52:48,57,51.4950963,25.262793500000001,PICKUP,private,100
     datapointwts = [];
     lats = []; lons = []; j = 0;
+    print datafile
     with open(datafile,'rb') as f:
         for line in f:
             j = j+1;
@@ -35,7 +36,7 @@ def getdata(nsamples,datafile,datestart,datestr):
                 break;
             line = line[:-1].decode('ascii', 'ignore')
             zz = line.split("\t")
-            if zz[6][:10]<datestr and zz[6][:10]>=datestart:#(LL[0] < 51.48) and LL[1] > 25.29:
+            if zz[6][:10]<datestr and zz[6][:10]>=datestart: 
                 ts = time.mktime(datetime.datetime.strptime(zz[6][:-3], "%Y-%m-%d %H:%M:%S").timetuple())
                 LL = (float(zz[0][:8]),float(zz[1][:8])); angle = float(zz[-1])-180; speed = float(zz[5])
                 if j>1:
@@ -275,9 +276,9 @@ def splitclustersparallel(datapointwts,seeds):
             print(cl,scl,[(anglebetweentwopoints(scl,xx),scl[-1])  for xx in cluster[cl]])
 
 def printclusters(seeds):
-    fdist = open('clusters_uic.txt', 'w')
-    for pp in seeds:
-        print(pp[0],pp[1],pp[2],end = '\n', file = fdist)
+    with open('clusters_uic.txt', 'w') as fdist:
+        for pp in seeds:
+            fdist.write("%s %s %s\n" % (pp[0],pp[1],pp[2]))
 
 def computeclusters(datapointwts,maxiteration,SEEDRADIUS,theta):
     datapoint = [(x[0], x[1], x[2]) for x in datapointwts];
@@ -295,21 +296,21 @@ def computeclusters(datapointwts,maxiteration,SEEDRADIUS,theta):
     return(seeds)
 
 def printedges(gedges, seeds,datapointwts,theta):
-    fdist = open('edgesuic.txt', 'w')
     maxspeed = [0 for xx in range(len(seeds))]
     cluster, p2cluster = point2cluster(datapointwts, seeds,theta);
     for cd in cluster:
         maxspeed[cd] = int(np.percentile([0] + [xx[3] for xx in cluster[cd]], 90))
-    for gg in gedges:
-        print(seeds[gg[0]][0],seeds[gg[0]][1],seeds[gg[0]][2],seeds[gg[1]][0],seeds[gg[1]][1],seeds[gg[1]][2], maxspeed[gg[0]], maxspeed[gg[1]], end = '\n', file = fdist)
+    with open('edgesuic.txt', 'w') as fdist:
+        for gg in gedges:
+            fdist.write("%s %s %s %s %s %s %s %s\n" % (seeds[gg[0]][0],seeds[gg[0]][1],seeds[gg[0]][2],seeds[gg[1]][0],seeds[gg[1]][1],seeds[gg[1]][2], maxspeed[gg[0]], maxspeed[gg[1]]))
 
 def getgeojson(gedges,seeds):
-    fdist = open('map0.geojson', 'w')
     inp = []
     for xx in gedges:
         ll1 = seeds[xx[0]]; ll2 = seeds[xx[1]];
         inp.append([(ll1[0],ll1[1]),(ll2[0],ll2[1])])
-    print(MultiLineString(inp),end = '', file = fdist)
+    with open('map0.geojson', 'w') as fdist:
+        fdist.write(MultiLineString(inp))
 
 def plotmap(seeds,gedges,datapointwts):
     plt.figure(figsize=(12, 8))  # in inches!

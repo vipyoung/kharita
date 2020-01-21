@@ -11,7 +11,7 @@ Timestamp: important to sort gps points within trajectories
 timestamp: in the format: yyyy-mm-dd hh:mm:ss+03
 angle: in 0-360 interval. Angle to the north. 
 
-## Running Kharita
+## Running Kharita Star (The online version)
 Kharita can be invoked from command line as follows:
 
 `python kharita_star.py -p data -f data_2015-10-01 -r 25 -s 10 -a 40`
@@ -28,6 +28,11 @@ Kharita can be invoked from command line as follows:
 
 ### Example 
 `python kharita_star.py -p data -f data_uic -r 100 -s 20 -a 60`
+
+## Running Kharita offline
+Kharita offline is a bit slower but tend to produce nicer and more accurate maps. 
+- command: `python kharita.py`
+
 
 ## Output
 The code will produce a txt file containing the edges of the generated **directed graph**. 

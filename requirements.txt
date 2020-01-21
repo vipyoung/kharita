@@ -1,5 +1,6 @@
 geojson==2.5.0
 geopy==1.20.0
 matplotlib==2.2.4
+networkx==2.2
 scikit-learn==0.20.4
 scipy==1.2.2

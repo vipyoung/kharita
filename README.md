@@ -1,6 +1,9 @@
 # kharita
 
 Kharita (Map in Arabic) is a robust and online algorithm for map inference from crowd-sourced gps data.
+We provide in this repository the code for two versions of the algorithm, both described in our SIAM SDM 2018 (See Citation below):
+- Kharita (Offline): this version creates the map using offline data. 
+- Kharita Star (Online): this version creates the map in an online fashion, i.e., one trajectory at a time.
 
 ## Input
 The input is a csv file in the following format:
